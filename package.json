@@ -27,8 +27,8 @@
   ],
   "dependencies": {
     "bk-utils": "benkroeger/bk-utils",
-    "redis": "latest",
-    "request": "https://github.com/benkroeger/request/tarball/master"
+    "redis": "~0.12.1",
+    "request": "benkroeger/request"
   },
   "devDependencies": {
     "grunt-contrib-jshint": "^0.10.0",

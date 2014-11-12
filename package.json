@@ -26,7 +26,7 @@
     "http"
   ],
   "dependencies": {
-    "bk-utils": "benkroeger/bk-utils",
+    "debug": "^2.1.0",
     "redis": "~0.12.1",
     "request": "benkroeger/request"
   },

@@ -1,6 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "main": "lib/oniyi-requestor.js",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
@@ -29,7 +29,8 @@
     "debug": "2.1.0",
     "lodash": "2.4.1",
     "redis": "0.12.1",
-    "request": "benkroeger/request#142bd872d145c33536d4de34967b56378321efa7"
+    "request": "benkroeger/request#142bd872d145c33536d4de34967b56378321efa7",
+    "xxhash": "0.2.0"
   },
   "devDependencies": {
     "grunt-contrib-jshint": "^0.10.0",

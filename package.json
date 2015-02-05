@@ -1,7 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.2.2",
-  "main": "lib/oniyi-requestor.js",
+  "version": "0.2.3",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
   "bugs": "https://github.com/benkroeger/oniyi-requestor/issues",
@@ -9,37 +8,39 @@
     "name": "Benjamin Kroeger",
     "email": "benjamin.kroeger@gmail.com"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/benkroeger/oniyi-requestor"
-  },
+  "repository": "benkroeger/oniyi-requestor",
   "license": "MIT",
   "files": [
-    "lib"
+    "index.js"
   ],
   "keywords": [
     "oniyi-requestor",
+    "oniyi",
     "request",
+    "requestor",
     "redis",
     "cache",
-    "node",
+    "limit",
+    "throttling",
     "http"
   ],
   "dependencies": {
-    "debug": "2.1.0",
-    "lodash": "2.4.1",
-    "redis": "0.12.1",
-    "request": "benkroeger/request#142bd872d145c33536d4de34967b56378321efa7",
-    "xxhash": "0.2.0"
+    "debug": "^2.1.1",
+    "lodash": "^3.1.0",
+    "oniyi-limiter": "0.0.3",
+    "redis": "^0.12.1",
+    "request": "benkroeger/request",
+    "xxhash": "^0.2.1"
   },
   "devDependencies": {
+    "grunt-cli": "^0.1.13",
     "grunt-contrib-jshint": "^0.10.0",
-    "grunt-contrib-nodeunit": "^0.3.3",
+    "grunt-contrib-nodeunit": "^0.4.1",
     "grunt-contrib-watch": "^0.6.1",
-    "load-grunt-tasks": "^0.4.0",
-    "time-grunt": "^0.3.1",
-    "grunt-mocha-cli": "^1.9.0",
-    "jshint-stylish": "^0.2.0"
+    "load-grunt-tasks": "^1.0.0",
+    "time-grunt": "^1.0.0",
+    "grunt-mocha-cli": "^1.11.0",
+    "jshint-stylish": "^1.0.0"
   },
   "scripts": {
     "test": "grunt"

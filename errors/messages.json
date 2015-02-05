@@ -1,0 +1,7 @@
+{
+	"OR-E 001": "Insufficient information provided when adding limit to requestor",
+	"OR-E 002": "Limit for this endpoint exists already",
+	"OR-E 003": "Can not add caching config. Caching is disabled on this requestor",
+	"OR-E 004": "Insufficient information provided when adding caching config to requestor",
+	"OR-E 005": "Cache settings for this endpoint exists already"
+}

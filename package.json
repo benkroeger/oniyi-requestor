@@ -1,6 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
   "bugs": "https://github.com/benkroeger/oniyi-requestor/issues",
@@ -12,8 +12,8 @@
   "license": "MIT",
   "files": [
     "index.js",
-    "./lib",
-    "./errors"
+    "lib",
+    "errors"
   ],
   "keywords": [
     "oniyi-requestor",
@@ -29,7 +29,7 @@
   "dependencies": {
     "debug": "^2.1.1",
     "lodash": "^3.1.0",
-    "oniyi-limiter": "0.0.4",
+    "oniyi-limiter": "0.0.5",
     "redis": "^0.12.1",
     "request": "benkroeger/request",
     "xxhash": "^0.2.1"

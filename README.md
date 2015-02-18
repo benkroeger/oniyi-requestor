@@ -39,7 +39,7 @@ var requestorOptions = {
 
 var request = new OniyiRequestor(requestorOptions);
 
-request.get('https://registry.npmjs.org/oniyi-requestor, {
+request.get('https://registry.npmjs.org/oniyi-requestor', {
 	headers: {
 		'user-agent': 'Mozilla/5.0'
 	},

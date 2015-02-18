@@ -87,6 +87,19 @@ function cacheProcessedResponseBody(err, result, type, redisClient, cacheKeys, e
   }
 }
 
+function makePassBackToCacheFunction(storable, redisClient, cacheKeys, expireat) {
+  if (!storable) {
+    logDebug('storable flag for passback function is %s', storable);
+    // clean up what we have in cache already (response + raw);
+    cacheProcessedResponseBody('not storable', null, null, redisClient, cacheKeys, null);
+    return _.noop;
+  }
+  return function(err, result, type){
+    type = (['string'].indexOf(type) > -1) ? type : 'string';
+    cacheProcessedResponseBody(err, result, type, redisClient, cacheKeys, expireat);
+  };
+}
+
 var serializableResponseProperties = [
   // 'headers',
   'trailers',
@@ -237,7 +250,7 @@ Requestor.prototype.handleRequest = function(options) {
   }
   var self = this;
 
-  // bypass caching completely if redisClient is not connected
+  // bypass caching if redis is not connected or cache is disabled
   if ((!self.redisClient.connected) || self.disableCache || options.disableCache) {
     return self.throttle(options);
   }
@@ -282,6 +295,7 @@ Requestor.prototype.handleRequest = function(options) {
       logDebug(util.inspect(options));
       evaluator.flagStorable(false);
     }
+
     if (evaluator && evaluator.isStorable(response)) {
       // only cache the response when statusCode is within the defined list
       if (typeof options.ttl === 'number') {
@@ -319,16 +333,14 @@ Requestor.prototype.handleRequest = function(options) {
 
     unlockAndCache.exec(function(error, res) {
       if (error) {
-        logWarn('Failed to store response in cache response {%s}; raw {%s}, expire-response {%s}, expire-raw {%s}', res[0], res[1], res[2], res[3]);
+        logWarn('Failed to store "response" in cache response {%s}; raw {%s}, expire-response {%s}, expire-raw {%s}', res[0], res[1], res[2], res[3]);
         logDebug(error);
       }
       if (res[0] === 1) {
         self.redisClient.publish(cacheKeys.lock, 'released');
       }
-      originalCallback(err, response, body, function(err, result, type) {
-        type = (['string'].indexOf(type) > -1) ? type : 'string';
-        cacheProcessedResponseBody(err, result, type, self.redisClient, cacheKeys, expireat);
-      });
+
+      originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.redisClient, cacheKeys, expireat));
     });
   }
 

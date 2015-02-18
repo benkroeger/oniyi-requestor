@@ -1,6 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
   "bugs": "https://github.com/benkroeger/oniyi-requestor/issues",

@@ -256,7 +256,7 @@ Requestor.prototype.handleRequest = function(options) {
   }
 
   // pick this requestor instance's cache settings and merge them with cache flags from the request 
-  var cacheSettings = _.merge(self.cacheSettings[options.parsedUrl.host], _.pick(options, ['storePrivate', 'storeNoStore', 'ignoreNoLastMod']));
+  var cacheSettings = _.merge({}, self.cacheSettings[options.parsedUrl.host], _.pick(options, ['storePrivate', 'storeNoStore', 'ignoreNoLastMod']));
 
   // if the request defines request validators, concatenate them with this instance's defaults
   // request specific validators will be first in this array so they get executed first

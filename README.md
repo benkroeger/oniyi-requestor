@@ -47,8 +47,15 @@ request.get('https://registry.npmjs.org/oniyi-requestor', {
 }, function(error, response, body, passBackToCache) {
 	// handle everything exactly as you are used to from the request/request module
 	// then parse your body and if needed, pass it pack to the cache
-	var parsedResponseBody = body.maintainers.name;
-	passBackToCache(/* there was no error */ null, parsedResponseBody);
+	if (response.fromCache) {
+		console.log('this response was received from cache');
+	}
+	if(response.processed) {
+		console.log('this response was processed / parsed before --> body is now the stringified version of what was passed back to "passBacktoCache" before');
+	} else {
+		var parsedResponseBody = body.maintainers.name;
+		passBackToCache(/* there was no error */ null, parsedResponseBody);
+	}
 });
 
 ```

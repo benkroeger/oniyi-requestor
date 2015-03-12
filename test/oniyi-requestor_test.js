@@ -13,16 +13,17 @@ var requestor = new oniyiRequestor({
   },
   cache: {
     'greenhouse.lotus.com': {
-      storePrivate: true
-      /*,
-        requestValidators: [
-          function(requestOptions, evaluator) {
-            evaluator.flagStorable(true);
-            evaluator.flagRetrievable(true);
-            return true;
-          }
-        ]
-      */
+      storePrivate: true,
+      storeNoStore: true
+        /*,
+          requestValidators: [
+            function(requestOptions, evaluator) {
+              evaluator.flagStorable(true);
+              evaluator.flagRetrievable(true);
+              return true;
+            }
+          ]
+        */
     }
   }
 });
@@ -32,23 +33,32 @@ setTimeout(function() {
     setTimeout(function() {
       requestor.get('https://greenhouse.lotus.com/profiles/atom/profileEntry.do', {
         qs: {
-          email: 'benjamin.kroeger@de.ibm.com'
+          userid: 'xxx'
         },
         headers: {
           'user-agent': 'Mozilla/5.0'
         },
+        'auth': {
+          'user': 'xxx',
+          'pass': 'xxx',
+          'sendImmediately': false
+        },
         ttl: 60
           /*,
-          authenticatedUser: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-            var r = Math.random() * 16 | 0,
-              v = c === 'x' ? r : (r & 0x3 || 0x8);
-            return v.toString(16);
-          })*/
-      }, function(err, response) {
+                  authenticatedUser: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0,
+                      v = c === 'x' ? r : (r & 0x3 || 0x8);
+                    return v.toString(16);
+                  })*/
+      }, function(err, response, body, passback) {
         if (err) {
           return console.log('Failed: %s', err);
         }
+        console.log(body);
         console.log('received profileEntry {fromCache: %s}', (response.fromCache || false));
+        if (typeof passback === 'function') {
+          passback(null, 'some nice data here');
+        }
       });
     }, i * 100);
   }

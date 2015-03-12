@@ -1,6 +1,6 @@
 #  [![NPM version][npm-image]][npm-url] [![Dependency Status][daviddm-url]][daviddm-image]
 
-> A redis cache implementation for the popular request package
+> A RFC2616 compliant http cache implementation for the popular request package with redis as storage engine 
 
 
 ## Install
@@ -61,6 +61,23 @@ request.get('https://registry.npmjs.org/oniyi-requestor', {
 ```
 
 
+
+we implemented a fully rfc 2616 compliant http cache in redis.
+
+additionally, every request can define it's own request / response cache validators that define weather the request is retrievable or the response is storable.
+
+The really neat trick is to allow  caching of the response after it was parsed.
+e.g. 
+--> retrieve the atom xml from IBM Connections that holds the information about a user's profile entry (which itself can contain a vcard string depending on chosen output format)
+--> parse the atom into json object
+--> store the json in cache
+
+--> next request will receive the parsed json object directly without talking to IBM Connections or the need to parse xml
+
+the client doesn't even need to know that there is a cache implementation in between, all he cares about is getting the json object
+
+cache hashes a request leveraging "xxhash" (extremely fast non-cryptographic hash algorithm). one of the hashed request properties is "authenticatedUser"... which can be treated like an audience. when undefined, the cache entry is public, when defined, only requests with the exact same value for "authenticatedUser" will retrieve the cached response.
+
 ## License
 
 MIT © [Benjamin Kroeger]()
@@ -68,5 +85,3 @@ MIT © [Benjamin Kroeger]()
 
 [npm-url]: https://npmjs.org/package/oniyi-requestor
 [npm-image]: https://badge.fury.io/js/oniyi-requestor.svg
-[daviddm-url]: https://david-dm.org/benkroeger/oniyi-requestor.svg?theme=shields.io
-[daviddm-image]: https://david-dm.org/benkroeger/oniyi-requestor

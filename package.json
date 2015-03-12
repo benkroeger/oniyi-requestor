@@ -1,6 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
   "bugs": "https://github.com/benkroeger/oniyi-requestor/issues",
@@ -28,11 +28,12 @@
   ],
   "dependencies": {
     "debug": "^2.1.1",
-    "lodash": "^3.1.0",
-    "oniyi-limiter": "0.0.5",
-    "redis": "^0.12.1",
-    "request": "benkroeger/request",
-    "xxhash": "^0.2.1"
+    "lodash": "^3.5.0",
+    "make-redis-client": "0.0.3",
+    "oniyi-cache": ".0.0.2",
+    "oniyi-limiter": "0.0.8",
+    "oniyi-locker": "0.0.2",
+    "request": "benkroeger/request"
   },
   "devDependencies": {
     "grunt-cli": "^0.1.13",

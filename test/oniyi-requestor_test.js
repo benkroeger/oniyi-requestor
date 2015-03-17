@@ -7,7 +7,7 @@ var requestor = new oniyiRequestor({
   redis: {},
   throttle: {
     'greenhouse.lotus.com': {
-      limit: 20,
+      limit: 2000,
       duration: 20000
     }
   },
@@ -29,18 +29,18 @@ var requestor = new oniyiRequestor({
 });
 
 setTimeout(function() {
-  for (var i = 0; i < 30; i++) {
+  for (var i = 0; i < 3000; i++) {
     setTimeout(function() {
       requestor.get('https://greenhouse.lotus.com/profiles/atom/profileEntry.do', {
         qs: {
-          userid: 'xxx'
+          userid: 'e806ef40-8a8a-1030-98c1-eb597bcfee57'
         },
         headers: {
           'user-agent': 'Mozilla/5.0'
         },
         'auth': {
-          'user': 'xxx',
-          'pass': 'xxx',
+          'user': 'benjamin.kroeger@de.ibm.com',
+          'pass': 'be8185kr',
           'sendImmediately': false
         },
         ttl: 60
@@ -67,5 +67,5 @@ setTimeout(function() {
     console.log('Received requests: %d', requestor.receivedRequests);
     console.log('Served from cache: %d', requestor.servedFromCache);
     console.log('Missed cache lookups: %d', requestor.cacheMiss);
-  }, 31 * 100 + 5000);
+  }, 3001 * 100 + 5000);
 }, 2000);

@@ -30,7 +30,7 @@
     "debug": "^2.1.1",
     "lodash": "^3.5.0",
     "make-redis-client": "0.0.3",
-    "oniyi-cache": ".0.0.2",
+    "oniyi-cache": "0.0.2",
     "oniyi-limiter": "0.0.8",
     "oniyi-locker": "0.0.2",
     "request": "benkroeger/request"

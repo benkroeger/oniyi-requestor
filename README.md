@@ -1,7 +1,10 @@
-#  [![NPM version][npm-image]][npm-url]
+[![NPM info](https://nodei.co/npm/oniyi-requestor.png?downloads=true)](https://nodei.co/npm/oniyi-requestor.png?downloads=true)
+
+[![dependencies](https://david-dm.org/benkroeger/oniyi-requestor.png)](https://david-dm.org/benkroeger/oniyi-requestor.png)
 
 > A RFC2616 compliant http cache implementation for the popular request package with redis as storage engine 
 
+execute http requests, cache responses (raw or parsed), lock access to remote uri's (prevent multiple equal requests to run simultaniously if the response is potentially cacheable). Additionally, set request limits per endpoint (remote host).
 
 ## Install
 

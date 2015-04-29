@@ -7,7 +7,6 @@ var assert = require('assert'),
 
 // 3rd party
 var _ = require('lodash'),
-  debug = require('debug'),
   makeRedisClient = require('make-redis-client'),
   request = require('request'),
   OniyiLocker = require('oniyi-locker'),
@@ -18,21 +17,6 @@ var _ = require('lodash'),
 var RequestorError = require('./errors/RequestorError');
 
 // variables and functions
-var moduleName = 'oniyi-requestor';
-
-
-var logError = debug(moduleName + ':error');
-// set this namespace to log via console.error
-logError.log = console.error.bind(console); // don't forget to bind to console!
-
-var logWarn = debug(moduleName + ':warn');
-// set all output to go via console.warn
-logWarn.log = console.warn.bind(console);
-
-var logDebug = debug(moduleName + ':debug');
-// set all output to go via console.warn
-logDebug.log = console.warn.bind(console);
-
 function parseargs(args) {
   var opts = {};
 
@@ -71,29 +55,6 @@ function parseargs(args) {
   return opts;
 }
 
-function makePassBackToCacheFunction(storable, cache, hash, expireAt) {
-  if (!storable) {
-    // clean up what we have in cache already (response + raw);
-    logDebug('response for hash {%s} is not storable --> purging cache', hash);
-    cache.purge(hash);
-    return _.noop;
-  }
-
-  return function(err, result) {
-    if (err) {
-      // the parsing failed -> there must be something wrong with this content -> better delete it from cache
-      cache.purge(hash);
-    }
-    if (typeof result === 'string') {
-      cache.put({
-        hash: hash,
-        parsed: result,
-        expireAt: expireAt
-      });
-    }
-  };
-}
-
 function Requestor(args) {
   var self = this;
 
@@ -111,10 +72,7 @@ function Requestor(args) {
     cache: {},
   }, _.pick(args, ['redis', 'throttle', 'maxLockTime', 'disableCache', 'cache']));
 
-  opts.redisClient = makeRedisClient(_.merge(args.redis, {
-    logDebug: logDebug,
-    logError: logError
-  }));
+  opts.redisClient = makeRedisClient(args.redis || {});
 
   // check pre-requisites
   assert(opts.redisClient, '.redisClient required');
@@ -149,6 +107,40 @@ function Requestor(args) {
   _.merge(self, _.pick(opts, ['redisClient', 'maxLockTime', 'maxLockAttemps', 'disableCache']));
 }
 
+// Debugging
+Requestor.debug = process.env.NODE_DEBUG && /\boniyi-requestor\b/.test(process.env.NODE_DEBUG);
+
+function debug() {
+  if (Requestor.debug) {
+    console.error('OniyiRequestor %s', util.format.apply(util, arguments));
+  }
+}
+
+// general functions
+function makePassBackToCacheFunction(storable, cache, hash, expireAt) {
+  if (!storable) {
+    // clean up what we have in cache already (response + raw);
+    debug('response for hash {%s} is not storable --> purging cache', hash);
+    cache.purge(hash);
+    return _.noop;
+  }
+
+  return function(err, result) {
+    if (err) {
+      // the parsing failed -> there must be something wrong with this content -> better delete it from cache
+      cache.purge(hash);
+    }
+    if (typeof result === 'string') {
+      cache.put({
+        hash: hash,
+        parsed: result,
+        expireAt: expireAt
+      });
+    }
+  };
+}
+
+// prototype definitions
 Requestor.prototype.addLimit = function(args) {
   var self = this,
     error;
@@ -162,7 +154,7 @@ Requestor.prototype.addLimit = function(args) {
     return false;
   }
   if (!_.isUndefined(self.limits[args.endpoint])) {
-    logWarn('can not overwrite existing limits for endpoint {%s}', args.endpoint);
+    debug('can not overwrite existing limits for endpoint {%s}', args.endpoint);
     error = new RequestorError('OR-E 002', args.endpoint);
     args.callback(error, null);
     return false;
@@ -201,7 +193,7 @@ Requestor.prototype.throttle = function(args) {
 
 Requestor.prototype.handleRequest = function(options) {
   if (!options.uri) {
-    logDebug('No valid uri in request options: %j', options);
+    debug('No valid uri in request options: %j', options);
     throw new Error('There is no valid uri provided for this request');
   }
   var self = this;
@@ -222,8 +214,8 @@ Requestor.prototype.handleRequest = function(options) {
       expireAt = null;
 
     if (err) {
-      logError('Executing {%s} request to {%s} failed', options.method, options.uri);
-      logDebug(err);
+      debug('Executing {%s} request to {%s} failed', options.method, options.uri);
+      debug(err);
       evaluator.flagStorable(false);
 
       // unlock the request and abort caching
@@ -233,7 +225,7 @@ Requestor.prototype.handleRequest = function(options) {
         message: 'not-storable',
         callback: function(unlockError) {
           if (unlockError) {
-            logWarn(unlockError);
+            debug(unlockError);
           }
           originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
         }
@@ -247,7 +239,7 @@ Requestor.prototype.handleRequest = function(options) {
         message: 'not-storable',
         callback: function(unlockError) {
           if (unlockError) {
-            logWarn(unlockError);
+            debug(unlockError);
           }
           originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
         }
@@ -258,7 +250,6 @@ Requestor.prototype.handleRequest = function(options) {
     if (_.isNumber(options.ttl)) {
       // we have a ttl defined for this request --> use it!
       expireAt = now + options.ttl;
-
     } else if (_.isString(response.headers['cache-control'])) {
       // we have a cache-control header
       // check for s-maxage value first
@@ -288,7 +279,7 @@ Requestor.prototype.handleRequest = function(options) {
     }, function(cacheError) {
       // and then release the request lock
       if (cacheError) {
-        logWarn(cacheError);
+        debug(cacheError);
       }
       return self.locker.unlock({
         key: requestHash,
@@ -296,7 +287,7 @@ Requestor.prototype.handleRequest = function(options) {
         message: 'released',
         callback: function(unlockError) {
           if (unlockError) {
-            logWarn(unlockError);
+            debug(unlockError);
           }
           originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
         }
@@ -336,14 +327,14 @@ Requestor.prototype.handleRequest = function(options) {
     options.unlockRequestAndCacheResponse = unlockRequestAndCacheResponse;
 
     if (err) {
-      logError('An error occured when loading data from cache for {%s}', requestHash);
-      logDebug(err);
+      debug('An error occured when loading data from cache for {%s}', requestHash);
+      debug(err);
       return self.lockAndExecute(options, requestHash);
     }
 
     // verify that we received the bare minimum from cache (response object and raw data)
     if (!(data && data.response && data.raw)) {
-      logDebug('no data in cache for {%s} --> executing new request', requestHash);
+      debug('no data in cache for {%s} --> executing new request', requestHash);
       self.cacheMiss++;
       return self.lockAndExecute(options, requestHash);
     }
@@ -373,15 +364,15 @@ Requestor.prototype.lockAndExecute = function(options, hash) {
     expiresAfter: self.maxLockTime,
     callback: function(err, data) {
       if (err) {
-        logError('An error occured while aquiring lock for {%s}', hash);
-        logDebug(err);
+        debug('An error occured while aquiring lock for {%s}', hash);
+        debug(err);
         options.callback = options.unlockRequestAndCacheResponse;
         return self.throttle(options);
       }
 
       switch (data.state) {
         case 'locked':
-          logDebug('Aquired lock for {%s}, executing throttled request now', hash);
+          debug('Aquired lock for {%s}, executing throttled request now', hash);
           options.unlockToken = data.token;
           options.callback = options.unlockRequestAndCacheResponse;
           self.throttle(options);
@@ -395,13 +386,13 @@ Requestor.prototype.lockAndExecute = function(options, hash) {
           self.handleRequest(options);
           break;
         case 'not-storable':
-          logDebug('Received not-storable notification for {%s}', hash);
-          logDebug('will set options accordingly and re-execute request');
+          debug('Received not-storable notification for {%s}', hash);
+          debug('will set options accordingly and re-execute request');
           options.disableCache = true;
           self.handleRequest(options);
           break;
         case 'released':
-          logDebug('Received lock release notification for {%s}', hash);
+          debug('Received lock release notification for {%s}', hash);
           self.handleRequest(options);
           break;
       }

@@ -177,7 +177,7 @@ Requestor.prototype.throttle = function(args) {
   var self = this;
   if (!args.disableCache && self.limits[args.parsedUrl.host]) {
     var dummyRequestor;
-    self.limits[args.parsedUrl.host].getBucket(function(err, bucket) {
+    self.limits[args.parsedUrl.host].throttle(function(err, bucket) {
       if (err) {
         return args.callback(err, null);
       }
@@ -246,6 +246,7 @@ Requestor.prototype.handleRequest = function(options) {
       });
     }
 
+    console.log(response.headers);
     // determine the expireAt timestamp (either from provided ttl or from response headers)
     if (_.isNumber(options.ttl)) {
       // we have a ttl defined for this request --> use it!
@@ -264,12 +265,13 @@ Requestor.prototype.handleRequest = function(options) {
         // maxage was found
         expireAt = now + parseInt(maxAge[1], null);
 
-      } else if ((response.headers['expires'] || '') !== '') {
+      } else if ((response.headers.expires || '') !== '') {
         // no maxage found, try our luck with the expires header
-        expireAt = Math.round((new Date(response.headers['expires'])).getTime() / 1000);
+        expireAt = Math.round((new Date(response.headers.expires)).getTime() / 1000);
       }
     }
 
+    console.log('expireat: %d', expireAt);
     // store the serialized response object and the raw response in cache
     self.cache.put({
       hash: requestHash,

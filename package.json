@@ -12,7 +12,6 @@
   "license": "MIT",
   "files": [
     "index.js",
-    "lib",
     "errors"
   ],
   "keywords": [

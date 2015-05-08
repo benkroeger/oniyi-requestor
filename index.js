@@ -7,6 +7,7 @@ var assert = require('assert'),
 
 // 3rd party
 var _ = require('lodash'),
+  async = require('async'),
   makeRedisClient = require('make-redis-client'),
   request = require('request'),
   OniyiLocker = require('oniyi-locker'),
@@ -55,6 +56,15 @@ function parseargs(args) {
   return opts;
 }
 
+function putCookiesInJar(setCookieHeaders, completeRequestURI, cookieJar, callback) {
+  if (typeof setCookieHeaders === 'string') {
+    setCookieHeaders = [setCookieHeaders];
+  }
+  async.each(setCookieHeaders, function(setCookieHeader, callback) {
+    cookieJar.setCookie(setCookieHeader, completeRequestURI, callback);
+  }, callback);
+}
+
 function Requestor(args) {
   var self = this;
 
@@ -72,7 +82,7 @@ function Requestor(args) {
     cache: {},
   }, _.pick(args, ['redis', 'throttle', 'maxLockTime', 'disableCache', 'cache']));
 
-  opts.redisClient = makeRedisClient(args.redis || {});
+  opts.redisClient = makeRedisClient(args.redis || {});
 
   // check pre-requisites
   assert(opts.redisClient, '.redisClient required');
@@ -116,7 +126,60 @@ function debug() {
   }
 }
 
-// general functions
+/**
+ * General Functions
+ */
+
+// "request" does not support async cookie jars. We need to load cookies upfront and make sure we apply
+// possible set-cookie headers from the response as well
+function augmentArgsForAsyncCookieJar(args, callback) {
+  var jar = args.jar;
+
+  // do we have a cookie jar and is it async?
+  if (jar && jar.store && !jar.store.synchronous) {
+    // retrieve cookies from jar asynchronously
+    return jar.getCookieString(args.uri, function(err, cookieString) {
+      if (err) {
+        return callback(err, args);
+      }
+
+      // save reference to original callback from args
+      var originalCallback = args.callback;
+
+      // remove the async jar from request args
+      args.jar = null;
+
+      // write cookies from jar to the request headers,
+      // don't override existing cookies
+      args.headers = args.headers || {};
+      args.headers.cookie = cookieString + ((args.headers.cookie) ? '; ' + args.headers.cookie : '');
+
+      // override the callback function
+      // in here we read the response's set-cookie header and apply values to our cookie jar
+      args.callback = function(err, response) {
+        if (err) {
+          return originalCallback.apply(null, arguments);
+        }
+
+        if (response && response.headers && response.headers['set-cookie'] && response.request.uri.href) {
+          return putCookiesInJar(response.headers['set-cookie'], response.request.uri.href, jar, function(err) {
+            if (err) {
+              debug('an error occured when storing cookies in jar {%s}', jar.id);
+            }
+            return originalCallback.apply(null, arguments);
+          });
+        }
+
+        return originalCallback.apply(null, arguments);
+      };
+      callback(null, args);
+    });
+  }
+
+  // request does not include an async cookie jar
+  callback(null, args);
+}
+
 function makePassBackToCacheFunction(storable, cache, hash, expireAt) {
   if (!storable) {
     // clean up what we have in cache already (response + raw);
@@ -174,6 +237,7 @@ Requestor.prototype.addCacheSetting = function(args) {
 };
 
 Requestor.prototype.throttle = function(args) {
+
   var self = this;
   if (!args.disableCache && self.limits[args.parsedUrl.host]) {
     var dummyRequestor;
@@ -191,171 +255,175 @@ Requestor.prototype.throttle = function(args) {
   return request(args.uri, args, args.callback);
 };
 
-Requestor.prototype.handleRequest = function(options) {
-  if (!options.uri) {
-    debug('No valid uri in request options: %j', options);
-    throw new Error('There is no valid uri provided for this request');
+Requestor.prototype.handleRequest = function(args) {
+  if (!args.uri) {
+    debug('No valid uri in request options: %j', args);
+    return args.callback(new Error('There is no valid uri provided for this request'));
   }
   var self = this;
 
-  // bypass caching if redis is not connected or cache is disabled
-  if ((!self.redisClient.connected) || self.disableCache || options.disableCache) {
-    return self.throttle(options);
-  }
-
-  var evaluator = self.cache.getEvaluator(options.parsedUrl.host, options);
-
-  var requestHash = self.cache.hash(options);
-
-  var originalCallback = options.callback;
-
-  function unlockRequestAndCacheResponse(err, response, body) {
-    var now = Math.round(Date.now() / 1000),
-      expireAt = null;
-
+  augmentArgsForAsyncCookieJar(args, function(err, options) {
     if (err) {
-      debug('Executing {%s} request to {%s} failed', options.method, options.uri);
-      debug(err);
-      evaluator.flagStorable(false);
+      return args.callback(err);
+    }
 
-      // unlock the request and abort caching
-      return self.locker.unlock({
-        key: requestHash,
-        token: options.unlockToken,
-        message: 'not-storable',
-        callback: function(unlockError) {
-          if (unlockError) {
-            debug(unlockError);
+    // bypass caching if redis is not connected or cache is disabled
+    if ((!self.redisClient.connected) || self.disableCache || options.disableCache) {
+      return self.throttle(options);
+    }
+
+    var evaluator = self.cache.getEvaluator(options.parsedUrl.host, options);
+
+    var requestHash = self.cache.hash(options);
+
+    var originalCallback = options.callback;
+
+    function unlockRequestAndCacheResponse(err, response, body) {
+      var now = Math.round(Date.now() / 1000),
+        expireAt = null;
+
+      if (err) {
+        debug('Executing {%s} request to {%s} failed', options.method, options.uri);
+        debug(err);
+        evaluator.flagStorable(false);
+
+        // unlock the request and abort caching
+        return self.locker.unlock({
+          key: requestHash,
+          token: options.unlockToken,
+          message: 'not-storable',
+          callback: function(unlockError) {
+            if (unlockError) {
+              debug(unlockError);
+            }
+            originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
           }
-          originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
+        });
+      }
+
+      if (!(evaluator && evaluator.isStorable(response))) {
+        return self.locker.unlock({
+          key: requestHash,
+          token: options.unlockToken,
+          message: 'not-storable',
+          callback: function(unlockError) {
+            if (unlockError) {
+              debug(unlockError);
+            }
+            originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
+          }
+        });
+      }
+
+      // determine the expireAt timestamp (either from provided ttl or from response headers)
+      if (_.isNumber(options.ttl)) {
+        // we have a ttl defined for this request --> use it!
+        expireAt = now + options.ttl;
+      } else if (_.isString(response.headers['cache-control'])) {
+        // we have a cache-control header
+        // check for s-maxage value first
+        var maxAge = response.headers['cache-control'].match(/s-maxage=([0-9]+)/);
+
+        if (!(_.isArray(maxAge) && maxAge[1])) {
+          // fallback to maxage when s-maxage wasn't found
+          maxAge = response.headers['cache-control'].match(/maxage=([0-9]+)/);
         }
+
+        if ((_.isArray(maxAge) && maxAge[1])) {
+          // maxage was found
+          expireAt = now + parseInt(maxAge[1], null);
+
+        } else if ((response.headers.expires || '') !== '') {
+          // no maxage found, try our luck with the expires header
+          expireAt = Math.round((new Date(response.headers.expires)).getTime() / 1000);
+        }
+      }
+
+      // store the serialized response object and the raw response in cache
+      self.cache.put({
+        hash: requestHash,
+        response: response,
+        raw: body,
+        expireAt: expireAt
+      }, function(cacheError) {
+        // and then release the request lock
+        if (cacheError) {
+          debug(cacheError);
+        }
+        return self.locker.unlock({
+          key: requestHash,
+          token: options.unlockToken,
+          message: 'released',
+          callback: function(unlockError) {
+            if (unlockError) {
+              debug(unlockError);
+            }
+            originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
+          }
+        });
       });
     }
 
-    if (!(evaluator && evaluator.isStorable(response))) {
-      return self.locker.unlock({
-        key: requestHash,
-        token: options.unlockToken,
-        message: 'not-storable',
-        callback: function(unlockError) {
-          if (unlockError) {
-            debug(unlockError);
-          }
-          originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
-        }
-      });
+    // since buffer piping requires streams and this current implementation wouldn't represent a stream if response comes from cache,
+    // the requesting code can set opts.disableCache to true, which bypasses the cache implementation, too
+    // we also check the connection status of our redis client. If the client is not connected, waiting for the connection could potentially
+    // cause the request processing to take longer than without caching. Thus we bypass cache when our redis client is not connected
+
+    // @TODO: since redisClient provides a property to keep track of currently queued commands,
+    // we could additionally provide a threashold for at which command queue lenght we should start bypassing the cache and call the backend directly
+    // this.redisClient.command_queue.length
+
+    // if not retrievable, neve use lock feature --> response MUST not be retreived from cache!
+    if (!evaluator.isRetrievable(options)) {
+      // if none of the retrievable validators have set the evaluator.storable to "false",
+      // we overwrite the callback with the one that tries to cache the response
+      if (evaluator.storable !== false) {
+        options.callback = unlockRequestAndCacheResponse;
+      }
+      return self.throttle(options);
     }
 
-    console.log(response.headers);
-    // determine the expireAt timestamp (either from provided ttl or from response headers)
-    if (_.isNumber(options.ttl)) {
-      // we have a ttl defined for this request --> use it!
-      expireAt = now + options.ttl;
-    } else if (_.isString(response.headers['cache-control'])) {
-      // we have a cache-control header
-      // check for s-maxage value first
-      var maxAge = response.headers['cache-control'].match(/s-maxage=([0-9]+)/);
-
-      if (!(_.isArray(maxAge) && maxAge[1])) {
-        // fallback to maxage when s-maxage wasn't found
-        maxAge = response.headers['cache-control'].match(/maxage=([0-9]+)/);
+    if (options.forceFresh) {
+      // if none of the retrievable validators have set the evaluator.storable to "false",
+      // we overwrite the callback with the one that tries to cache the response
+      if (evaluator.storable !== false) {
+        options.callback = unlockRequestAndCacheResponse;
       }
-
-      if ((_.isArray(maxAge) && maxAge[1])) {
-        // maxage was found
-        expireAt = now + parseInt(maxAge[1], null);
-
-      } else if ((response.headers.expires || '') !== '') {
-        // no maxage found, try our luck with the expires header
-        expireAt = Math.round((new Date(response.headers.expires)).getTime() / 1000);
-      }
+      return self.throttle(options);
     }
 
-    console.log('expireat: %d', expireAt);
-    // store the serialized response object and the raw response in cache
-    self.cache.put({
-      hash: requestHash,
-      response: response,
-      raw: body,
-      expireAt: expireAt
-    }, function(cacheError) {
-      // and then release the request lock
-      if (cacheError) {
-        debug(cacheError);
+    self.cache.get(requestHash, function(err, data) {
+      options.unlockRequestAndCacheResponse = unlockRequestAndCacheResponse;
+
+      if (err) {
+        debug('An error occured when loading data from cache for {%s}', requestHash);
+        debug(err);
+        return self.lockAndExecute(options, requestHash);
       }
-      return self.locker.unlock({
-        key: requestHash,
-        token: options.unlockToken,
-        message: 'released',
-        callback: function(unlockError) {
-          if (unlockError) {
-            debug(unlockError);
-          }
-          originalCallback(err, response, body, makePassBackToCacheFunction(!!evaluator.storable, self.cache, requestHash, expireAt));
-        }
-      });
+
+      // verify that we received the bare minimum from cache (response object and raw data)
+      if (!(data && data.response && data.raw)) {
+        debug('no data in cache for {%s} --> executing new request', requestHash);
+        self.cacheMiss++;
+        return self.lockAndExecute(options, requestHash);
+      }
+
+      // if we have the received parsed data from cache, respond with that
+      if (data.parsed) {
+        data.response.parsed = true;
+        self.servedFromCache++;
+        return options.callback(null, data.response, data.parsed);
+      }
+
+      // otherwise respond with the raw data
+      if (data.raw) {
+        self.servedFromCache++;
+        return options.callback(null, data.response, data.raw);
+      }
+
+      // fallback! when all conditions above fail, execute a new request
+      return self.lockAndExecute(options, requestHash);
     });
-  }
-
-  // since buffer piping requires streams and this current implementation wouldn't represent a stream if response comes from cache,
-  // the requesting code can set opts.requiresPipe to true, which bypasses the cache implementation, too
-  // we also check the connection status of our redis client. If the client is not connected, waiting for the connection could potentially
-  // cause the request processing to take longer than without caching. Thus we bypass cache when our redis client is not connected
-
-  // @TODO: since redisClient provides a property to keep track of currently queued commands,
-  // we could additionally provide a threashold for at which command queue lenght we should start bypassing the cache and call the backend directly
-  // this.redisClient.command_queue.length
-
-  // if not retrievable, neve use lock feature --> response MUST not be retreived from cache!
-  if (!evaluator.isRetrievable(options)) {
-    // if none of the retrievable validators have set the evaluator.storable to "false",
-    // we overwrite the callback with the one that tries to cache the response
-    if (evaluator.storable !== false) {
-      options.callback = unlockRequestAndCacheResponse;
-    }
-    return self.throttle(options);
-  }
-
-  if (options.forceFresh) {
-    // if none of the retrievable validators have set the evaluator.storable to "false",
-    // we overwrite the callback with the one that tries to cache the response
-    if (evaluator.storable !== false) {
-      options.callback = unlockRequestAndCacheResponse;
-    }
-    return self.throttle(options);
-  }
-
-  self.cache.get(requestHash, function(err, data) {
-    options.unlockRequestAndCacheResponse = unlockRequestAndCacheResponse;
-
-    if (err) {
-      debug('An error occured when loading data from cache for {%s}', requestHash);
-      debug(err);
-      return self.lockAndExecute(options, requestHash);
-    }
-
-    // verify that we received the bare minimum from cache (response object and raw data)
-    if (!(data && data.response && data.raw)) {
-      debug('no data in cache for {%s} --> executing new request', requestHash);
-      self.cacheMiss++;
-      return self.lockAndExecute(options, requestHash);
-    }
-
-    // if we have the received parsed data from cache, respond with that
-    if (data.parsed) {
-      data.response.parsed = true;
-      self.servedFromCache++;
-      return options.callback(null, data.response, data.parsed);
-    }
-
-    // otherwise respond with the raw data
-    if (data.raw) {
-      self.servedFromCache++;
-      return options.callback(null, data.response, data.raw);
-    }
-
-    // fallback! when all conditions above fail, execute a new request
-    return self.lockAndExecute(options, requestHash);
   });
 };
 

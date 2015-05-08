@@ -1,6 +1,6 @@
 {
   "name": "oniyi-requestor",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A redis cache implementation for the popular request package",
   "homepage": "https://github.com/benkroeger/oniyi-requestor",
   "bugs": "https://github.com/benkroeger/oniyi-requestor/issues",
@@ -26,8 +26,9 @@
     "http"
   ],
   "dependencies": {
-    "lodash": "~3.7.0",
-    "make-redis-client": "~0.0.4",
+    "async": "~0.9.0",
+    "lodash": "~3.8.0",
+    "make-redis-client": "~0.0.5",
     "oniyi-cache": "~0.0.3",
     "oniyi-limiter": "~0.0.9",
     "oniyi-locker": "~0.0.3",

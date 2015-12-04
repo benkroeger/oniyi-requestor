@@ -1,6 +1,6 @@
-[![NPM info](https://nodei.co/npm/oniyi-requestor.png?downloads=true)](https://nodei.co/npm/oniyi-requestor.png?downloads=true)
+# Deprecation notice
+This node module is no longer maintained.
 
-[![dependencies](https://david-dm.org/benkroeger/oniyi-requestor.png)](https://david-dm.org/benkroeger/oniyi-requestor.png)
 
 > A RFC2616 compliant http cache implementation for the popular request package with redis as storage engine 
 
